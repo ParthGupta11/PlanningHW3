@@ -20,7 +20,7 @@ Actions:
         Effects: !InAir(Q), OnRob(Q)
 
         Charge(x)
-        Preconditions: Quad(x), LowCharge(x), OnRob(x) 
+        Preconditions: Quad(x), LowCharge(x), OnRob(x)
         Effects: !LowCharge(x), HighCharge(x)
 
         FillWater(x)

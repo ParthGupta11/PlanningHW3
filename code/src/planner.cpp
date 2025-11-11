@@ -36,6 +36,8 @@ bool print_status = true;
 int max_effect_size = 0;
 bool enable_heuristics = true;
 
+string heuristic_fn = "edl";
+
 class GroundedCondition
 {
     string predicate;
@@ -994,12 +996,8 @@ std::vector<GroundedAction> getApplicableActions(State* state, Env* env, std::ve
     return validActions;
 }
 
-float getHeristic(State* state, State* goal){
 
-    if (!enable_heuristics) {
-        return 0.0;
-    }
-
+float getHeuristicHam(State* state, State* goal){
     if (max_effect_size <= 0) {
         throw runtime_error("max_effect_size is less than or equal to 0");
     }
@@ -1023,8 +1021,33 @@ float getHeristic(State* state, State* goal){
 
     // Make the h value admissable
     missing = missing / max_effect_size;
-
     return missing;
+}
+
+float getHeuristicEDL(State* state, State* goal){
+    return 0.0;
+}
+
+
+float getHeristic(State* state, State* goal){
+
+    float h_val = 0.0;
+
+    if (!enable_heuristics) {
+        return 0.0;
+    }
+
+    if (heuristic_fn == "ham"){
+        h_val = getHeuristicHam(state, goal);
+        return h_val;
+    }
+
+    if(heuristic_fn == "edl"){
+        h_val = getHeuristicEDL(state, goal);
+        return h_val;
+    }
+
+    return 0.0;
 }
 
 list<GroundedAction> planner(Env *env)
@@ -1055,6 +1078,7 @@ list<GroundedAction> planner(Env *env)
 
     cout << "Enable Heuristics: " << enable_heuristics << endl;
     cout << "Max Effect Size: " << max_effect_size << endl;
+    cout << "Heuristic Function: " << heuristic_fn << endl;
 
     // Print all the grounded actions with their grounded preconditions and effects
     if (print_status && false) {
@@ -1252,6 +1276,14 @@ int main(int argc, char *argv[])
             enable_heuristics = false;
         } else if (heuristic_arg == "1" || heuristic_arg == "true") {
             enable_heuristics = true;
+        }
+    }
+
+    // Parse optional heuristic function argument
+    if (argc > 3) {
+        string heuristic_fn_arg = argv[3];
+        if (heuristic_fn_arg == "edl" || heuristic_fn_arg == "ham") {
+            heuristic_fn = heuristic_fn_arg;
         }
     }
 
