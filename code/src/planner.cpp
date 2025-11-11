@@ -34,6 +34,7 @@ using namespace std;
 bool print_status = true;
 
 int max_effect_size = 0;
+bool enable_heuristics = true;
 
 class GroundedCondition
 {
@@ -995,6 +996,10 @@ std::vector<GroundedAction> getApplicableActions(State* state, Env* env, std::ve
 
 float getHeristic(State* state, State* goal){
 
+    if (!enable_heuristics) {
+        return 0.0;
+    }
+
     if (max_effect_size <= 0) {
         throw runtime_error("max_effect_size is less than or equal to 0");
     }
@@ -1047,6 +1052,9 @@ list<GroundedAction> planner(Env *env)
     int states_expanded = 0;
 
     vector<GroundedAction> allActions = generateAllGroundedActions(env);
+
+    cout << "Enable Heuristics: " << enable_heuristics << endl;
+    cout << "Max Effect Size: " << max_effect_size << endl;
 
     // Print all the grounded actions with their grounded preconditions and effects
     if (print_status && false) {
@@ -1184,9 +1192,9 @@ list<GroundedAction> planner(Env *env)
             // Set costs and parent pointers
             float new_g = currentState->g + 1;
             neighborState->g = new_g;
-            neighborState->f = neighborState->g + neighborState->h;
             neighborState->parent = currentState;
             neighborState->h = getHeristic(neighborState, goalState);
+            neighborState->f = neighborState->g + neighborState->h;
 
             // store a copy of the applied action on the heap so path reconstruction can reference it
             GroundedAction* parentActionCopy = new GroundedAction(action.get_name(), action.get_arg_values(), action.get_grounded_preconditions(), action.get_grounded_effects());
@@ -1236,6 +1244,17 @@ int main(int argc, char *argv[])
     const char *env_file = "example.txt";
     if (argc > 1)
         env_file = argv[1];
+
+    // Parse optional heuristic flag argument
+    if (argc > 2) {
+        string heuristic_arg = argv[2];
+        if (heuristic_arg == "0" || heuristic_arg == "false") {
+            enable_heuristics = false;
+        } else if (heuristic_arg == "1" || heuristic_arg == "true") {
+            enable_heuristics = true;
+        }
+    }
+
     std::string envsDirPath = ENVS_DIR;
     char *filename = new char[envsDirPath.length() + strlen(env_file) + 2];
     strcpy(filename, envsDirPath.c_str());
