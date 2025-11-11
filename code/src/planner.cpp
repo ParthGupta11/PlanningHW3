@@ -997,6 +997,31 @@ std::vector<GroundedAction> getApplicableActions(State* state, Env* env, std::ve
 }
 
 
+std::vector<GroundedAction> getApplicableActionsEDL(State* state, Env* env, std::vector<GroundedAction>& allActions) {
+    std::vector<GroundedAction> validActions;
+
+    for (const auto &gaction : allActions) {
+        bool applicable = true;
+        auto preconds = gaction.get_grounded_preconditions();
+        for (const auto &pc : preconds) {
+            if (pc.get_truth()) {
+                // positive precondition: must be present
+                if (state->conditions.find(pc) == state->conditions.end()) {
+                    applicable = false;
+                    break;
+                }
+            }
+            // Ignore checking for negative preconditions
+        }
+
+        if (applicable) {
+            validActions.push_back(gaction);
+        }
+    }
+
+    return validActions;
+}
+
 float getHeuristicHam(State* state, State* goal){
     if (max_effect_size <= 0) {
         throw runtime_error("max_effect_size is less than or equal to 0");
@@ -1024,12 +1049,143 @@ float getHeuristicHam(State* state, State* goal){
     return missing;
 }
 
-float getHeuristicEDL(State* state, State* goal){
-    return 0.0;
+float getHeuristicEDL(State* state, State* goalState, Env* env, std::vector<GroundedAction>& allActions){
+
+    // Variable to store distance
+    float h_val = 0.0;
+
+    // Start and Goal states
+    unordered_set<GroundedCondition, GroundedConditionHasher, GroundedConditionComparator> initial_conditions = state->conditions;
+    unordered_set<GroundedCondition, GroundedConditionHasher, GroundedConditionComparator> goal_conditions = goalState->conditions;
+
+    // Open list (Priority Queue)
+    priority_queue<State*, vector<State*>, CompareF> openList;
+
+    // Closed list (Set)
+    unordered_set<std::vector<string>, VectorStringHasher, VectorStringComparator> closedSet;
+
+    // Best G values
+    unordered_map<std::vector<string>, float, VectorStringHasher, VectorStringComparator> gValues;
+
+    // Generate string from goal conditions for easy comparison
+    std::vector<string> GoalConditionsString = getStateConditionsAsStrings(goalState);
+
+    sort(GoalConditionsString.begin(), GoalConditionsString.end());
+    // Initialize the open list with the start state
+    State* startState = new State;
+    startState->conditions = state->conditions;
+    startState->g = 0;
+    startState->h = 0;
+    startState->f = startState->g + startState->h;
+    startState->parent = nullptr;
+    openList.push(startState);
+    gValues[getStateConditionsAsStrings(startState)] = startState->g;
+
+    while (!openList.empty()){
+
+        // Print size of open list
+        if (print_status && false) {
+            std::cout << "Open list size: " << openList.size() << "\r";
+        }
+
+        // Get the state with the lowest f value
+        State* currentState = openList.top();
+        openList.pop();
+
+        std::vector<string> stateConditionsString = getStateConditionsAsStrings(currentState);
+
+        // Skip if already in closed set
+        if (closedSet.count(stateConditionsString) > 0) {
+            delete currentState;
+            continue;
+        }
+
+        // Lazy deletion: Skip if this state has a higher g value than the best known g value
+        if (gValues.find(stateConditionsString) != gValues.end() && currentState->g > gValues[stateConditionsString]) {
+            delete currentState;
+            continue;
+        }
+
+        // Check if we reached the goal: all goal conditions must be present in the current state
+        bool goalReached = true;
+        for (const auto &gcond : goal_conditions) {
+            if (currentState->conditions.find(gcond) == currentState->conditions.end()) {
+                goalReached = false;
+                break;
+            }
+        }
+        if (goalReached) {
+            h_val = currentState->g;
+            delete currentState;
+            break;
+        }
+
+        // Add neighbors to open list
+        vector<GroundedAction> applicableActions = getApplicableActionsEDL(currentState, env, allActions);
+
+        if (print_status and false) {
+            cout << "\nExpanding state (" << stateConditionsString.size() << " conditions). Applicable actions: " << applicableActions.size() << endl;
+            for (const auto &aa : applicableActions) {
+                cout << "  - " << aa.toString() << endl;
+            }
+        }
+
+        for (const GroundedAction &action : applicableActions) {
+            // Generate new state by applying the action's grounded effects
+            State* neighborState = new State;
+            neighborState->conditions = currentState->conditions; // start from current
+
+            // Apply effects: add positive effects ONLY (empty-delete-list ignores negative effects)
+            auto effects = action.get_grounded_effects();
+            for (const auto &ef : effects) {
+                if (ef.get_truth()) {
+                    neighborState->conditions.insert(ef);
+                }
+                // Ignore the negative effects
+            }
+
+            // Set costs and parent pointers
+            float new_g = currentState->g + 1;
+            neighborState->g = new_g;
+            neighborState->h = 0;
+            neighborState->f = neighborState->g + neighborState->h;
+
+            // Build vector key for this state's conditions (order-insensitive hashing/comparison handles ordering)
+            std::vector<string> neighborConditionsVec = getStateConditionsAsStrings(neighborState);
+
+            // Skip if already closed
+            if (closedSet.count(neighborConditionsVec) > 0) {
+                delete neighborState;
+                continue;
+            }
+
+            // If this path to neighbor is better than any previous, or unseen, push to open list
+            if (gValues.find(neighborConditionsVec) == gValues.end() || new_g < gValues[neighborConditionsVec]) {
+                gValues[neighborConditionsVec] = new_g;
+                openList.push(neighborState);
+            } else {
+                // not better, discard
+                delete neighborState;
+            }
+        }
+
+        closedSet.insert(stateConditionsString);
+        gValues[stateConditionsString] = currentState->g;
+        delete currentState;  // Clean up the current state after processing
+    }
+
+    // Clean up remaining states in open list
+    while (!openList.empty()) {
+        State* temp = openList.top();
+        openList.pop();
+        delete temp;
+    }
+
+    return h_val;
 }
 
 
-float getHeristic(State* state, State* goal){
+float getHeuristic(State* state, State* goal, Env* env, std::vector<GroundedAction>& allActions){
 
     float h_val = 0.0;
 
@@ -1043,7 +1199,7 @@ float getHeristic(State* state, State* goal){
     }
 
     if(heuristic_fn == "edl"){
-        h_val = getHeuristicEDL(state, goal);
+        h_val = getHeuristicEDL(state, goal, env, allActions);
         return h_val;
     }
 
@@ -1139,7 +1295,7 @@ list<GroundedAction> planner(Env *env)
     State* startState = new State;
     startState->conditions = initial_conditions;
     startState->g = 0;
-    startState->h = getHeristic(startState, goalState); // TODO: Define heuristic function
+    startState->h = getHeuristic(startState, goalState, env, allActions); // TODO: Define heuristic function
     startState->f = startState->g + startState->h;
     startState->parent = nullptr;
     openList.push(startState);
@@ -1217,7 +1373,7 @@ list<GroundedAction> planner(Env *env)
             float new_g = currentState->g + 1;
             neighborState->g = new_g;
             neighborState->parent = currentState;
-            neighborState->h = getHeristic(neighborState, goalState);
+            neighborState->h = getHeuristic(neighborState, goalState, env, allActions);
             neighborState->f = neighborState->g + neighborState->h;
 
             // store a copy of the applied action on the heap so path reconstruction can reference it
