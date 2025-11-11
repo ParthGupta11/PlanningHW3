@@ -1075,7 +1075,7 @@ float getHeuristicEDL(State* state, State* goalState, Env* env, std::vector<Grou
     State* startState = new State;
     startState->conditions = state->conditions;
     startState->g = 0;
-    startState->h = 0;
+    startState->h = getHeuristicHam(startState, goalState);
     startState->f = startState->g + startState->h;
     startState->parent = nullptr;
     openList.push(startState);
