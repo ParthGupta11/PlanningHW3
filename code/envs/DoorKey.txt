@@ -1,0 +1,20 @@
+Symbols: A,R1,R2,R3,G,K,D
+Initial conditions: Room(R1), Room(R2), Room(R3), Agent(A), Key(K), Door(D), In(K, R1), In(A, R3), Connected(R1, R2), Connected(R2, R1), Connected(R2, R3), Connected(R3, R2), Connected(R2, G), Connected(G, R2), Locked(D), !HasKey(A)
+Goal conditions: In(A, G), HasKey(A), !Locked(D)
+
+Actions:
+        MoveToRoom(x,y)
+        Preconditions: Room(x), Room(y), Connected(x, y), Connected(y, x), In(A, x)
+        Effects: !In(A, x), In(A, y)
+
+        PickUpKey(x)
+        Preconditions: Room(x), In(K, x), In(A, x), !HasKey(A)
+        Effects: !In(K, x), HasKey(A)
+
+        UnlockDoor(x)
+        Preconditions: Room(x), Connected(x, G), Connected(G, x), In(A, x), HasKey(A), Locked(D)
+        Effects: !Locked(D)
+
+        MoveToGoal(x)
+        Preconditions: Room(x), Connected(x, G), Connected(G, x), In(A, x), !Locked(D)
+        Effects: !In(A, x), In(A, G)
