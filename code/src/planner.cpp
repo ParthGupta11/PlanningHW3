@@ -11,6 +11,7 @@
 #include <queue>
 #include <cstring>
 #include <climits>
+#include <chrono>
 
 #define SYMBOLS 0
 #define INITIAL 1
@@ -1018,7 +1019,14 @@ list<GroundedAction> planner(Env *env)
     // actions.push_back(GroundedAction("Move", {"B", "Table", "C"}));
 
     ////// My Planner Implementation (A* Search) /////////
+
+    // Start timing
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     list<GroundedAction> actions;
+
+    // Counter for states expanded
+    int states_expanded = 0;
 
     vector<GroundedAction> allActions = generateAllGroundedActions(env);
 
@@ -1108,6 +1116,9 @@ list<GroundedAction> planner(Env *env)
             continue;
         }
 
+        // Increment states expanded counter
+        states_expanded++;
+
         // Check if we reached the goal: all goal conditions must be present in the current state
         bool goalReached = true;
         for (const auto &gcond : goal_conditions) {
@@ -1187,6 +1198,16 @@ list<GroundedAction> planner(Env *env)
         closedSet.insert(stateConditionsString);
         gValues[stateConditionsString] = currentState->g;
     }
+
+    // End timing
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+    // Print timing and statistics
+    cout << "\n\nPlanning Statistics:" << endl;
+    cout << "Time taken: " << duration.count() << " ms" << endl;
+    cout << "States expanded: " << states_expanded << endl;
+
     return actions;
 }
 
