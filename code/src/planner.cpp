@@ -33,6 +33,8 @@ using namespace std;
 
 bool print_status = true;
 
+int max_effect_size = 0;
+
 class GroundedCondition
 {
     string predicate;
@@ -910,6 +912,7 @@ void generateGroundedCombinations(
         }
 
         // Ground each effect similarly
+        int effectSize = 0;
         for (const Condition &cond : action.get_effects()) {
             list<string> condArgs = cond.get_args();
             list<string> groundedCondArgs;
@@ -923,6 +926,12 @@ void generateGroundedCombinations(
                 }
             }
             gEffects.insert(GroundedCondition(cond.get_predicate(), groundedCondArgs, cond.get_truth()));
+            effectSize++;
+        }
+
+        // Keep track of largest effect size to scale the hamming distance for h value
+        if(effectSize > max_effect_size){
+            max_effect_size = effectSize;
         }
 
         groundedActions.push_back(GroundedAction(action.get_name(), list<string>(currArgs.begin(), currArgs.end()), gPreconds, gEffects));
@@ -985,8 +994,13 @@ std::vector<GroundedAction> getApplicableActions(State* state, Env* env, std::ve
 }
 
 float getHeristic(State* state, State* goal){
+
+    if (max_effect_size <= 0) {
+        throw runtime_error("max_effect_size is less than or equal to 0");
+    }
+
     // Heuristic: number of goal conditions that are not satisfied in the given state.
-    int missing = 0;
+    float missing = 0;
     for (const auto &gcond : goal->conditions) {
         if (gcond.get_truth()) {
             // positive goal condition: must be present in state
@@ -1001,7 +1015,11 @@ float getHeristic(State* state, State* goal){
             }
         }
     }
-    return static_cast<float>(missing);
+
+    // Make the h value admissable
+    missing = missing / max_effect_size;
+
+    return missing;
 }
 
 list<GroundedAction> planner(Env *env)
