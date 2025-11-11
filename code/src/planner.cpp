@@ -872,7 +872,6 @@ Env *create_env(char *filename)
     return env;
 }
 
-
 void generateGroundedCombinations(
     Action action,
     vector<string> currArgs,
@@ -984,6 +983,26 @@ std::vector<GroundedAction> getApplicableActions(State* state, Env* env, std::ve
     return validActions;
 }
 
+float getHeristic(State* state, State* goal){
+    // Heuristic: number of goal conditions that are not satisfied in the given state.
+    int missing = 0;
+    for (const auto &gcond : goal->conditions) {
+        if (gcond.get_truth()) {
+            // positive goal condition: must be present in state
+            if (state->conditions.find(gcond) == state->conditions.end()) {
+                missing++;
+            }
+        } else {
+            // negative goal condition: the positive version must NOT be present
+            GroundedCondition positive(gcond.get_predicate(), gcond.get_arg_values(), true);
+            if (state->conditions.find(positive) != state->conditions.end()) {
+                missing++;
+            }
+        }
+    }
+    return static_cast<float>(missing);
+}
+
 list<GroundedAction> planner(Env *env)
 {
     //////////////////////////////////////////
@@ -1048,16 +1067,6 @@ list<GroundedAction> planner(Env *env)
     // Best G values
     unordered_map<std::vector<string>, float, VectorStringHasher, VectorStringComparator> gValues;
 
-    // Initialize the open list with the start state
-    State* startState = new State;
-    startState->conditions = initial_conditions;
-    startState->g = 0;
-    startState->h = 0; // TODO: Define heuristic function
-    startState->f = startState->g + startState->h;
-    startState->parent = nullptr;
-    openList.push(startState);
-    gValues[getStateConditionsAsStrings(startState)] = startState->g;
-
     // Generate string from goal conditions for easy comparison
     State* goalState = new State;
     goalState->conditions = goal_conditions;
@@ -1066,7 +1075,17 @@ list<GroundedAction> planner(Env *env)
     goalState->f = INT_MAX;
     goalState->parent = nullptr;
     std::vector<string> GoalConditionsString = getStateConditionsAsStrings(goalState);
+
     sort(GoalConditionsString.begin(), GoalConditionsString.end());
+    // Initialize the open list with the start state
+    State* startState = new State;
+    startState->conditions = initial_conditions;
+    startState->g = 0;
+    startState->h = getHeristic(startState, goalState); // TODO: Define heuristic function
+    startState->f = startState->g + startState->h;
+    startState->parent = nullptr;
+    openList.push(startState);
+    gValues[getStateConditionsAsStrings(startState)] = startState->g;
 
     while (!openList.empty()){
 
@@ -1136,9 +1155,9 @@ list<GroundedAction> planner(Env *env)
             // Set costs and parent pointers
             float new_g = currentState->g + 1;
             neighborState->g = new_g;
-            neighborState->h = 0; // heuristic not implemented
             neighborState->f = neighborState->g + neighborState->h;
             neighborState->parent = currentState;
+            neighborState->h = getHeristic(neighborState, goalState);
 
             // store a copy of the applied action on the heap so path reconstruction can reference it
             GroundedAction* parentActionCopy = new GroundedAction(action.get_name(), action.get_arg_values(), action.get_grounded_preconditions(), action.get_grounded_effects());
